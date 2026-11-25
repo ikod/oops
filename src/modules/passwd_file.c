@@ -75,7 +75,7 @@ static	enum	{Basic,Digest} scheme = Basic;
 
 static	char	*authreq = NULL;
 static	int	 authreqlen;
-static	char	*authreqfmt = "%s realm=%s";
+static	char	*authreqfmt = "%s realm=\"%s\"";
 static	char	*std_template = "\n<body>Authorization to proxy-server failed.<p><hr>\n\
 <i><font size=-1>by \'passwd_file\' module to Oops.";
 static	int	std_template_len;
@@ -83,7 +83,7 @@ static	int	pwf_charset_len;
 static	int	badschlen;
 static	char	*badsch=NULL;
 static	char	*badschfmt = "HTTP/1.0 407 Proxy Authentication required\n\
-Proxy-Authenticate: %s realm=%s\n\n\
+Proxy-Authenticate: %s realm=\"%s\"\n\n\
 <body>Authorization to proxy-server failed.<p>\n\
 Your browser proposed unsupported scheme\n\
 <hr>\n\
