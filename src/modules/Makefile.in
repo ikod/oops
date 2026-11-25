@@ -1,0 +1,109 @@
+CC = @CC@
+CXX = @CXX@
+LIBS = @LIBS@
+CFLAGS = @CFLAGS@ @DEFS@
+LDFLAGS = @LDFLAGS@
+LD = @LD@
+SOFLAGS = @SOFLAGS@
+OPT_MODS = @OPT_MODS@
+CXXCOMPFLAGS = @LIBGB_INCL@ @CXXCOMPFLAGS@
+CXXSOFLAGS = @LIBGB_INCL@ @CXXSOFLAGS@
+LIBDB_INCL = @LIBDB_INCL@
+MYSQL_LIB = @MYSQL_LIB@
+PGSQL_LIB = @PGSQL_LIB@
+EXTRASRC = @EXTRASRC@
+
+.SUFFIXES:	.c .cpp .o .so
+
+EXTRAOBJS = $(EXTRASRC:%c=../%o)
+
+.c.o:
+	${CC} ${CFLAGS} ${LIBDB_INCL} ${CDEFS} -c $<
+#
+.o.so:
+	${LD} $(SOFLAGS) $(LDFLAGS) -o $@ $< $(LIBS)
+
+.c.so:
+	${CC} ${CFLAGS} ${LIBDB_INCL} ${SOFLAGS} ${CDEFS} -c $<
+	${LD} $(SOFLAGS) $(LDFLAGS) -o $@ $(<:.c=.o) $(LIBS)
+
+.cpp.o:
+	${CXX} ${CFLAGS} ${SOFLAGS} ${CDEFS} $(CXXCOMPFLAGS) $< -o $*.a
+	mv $*.a $*.o
+
+.cpp.so:
+	${CXX} ${CFLAGS} ${CXXSOFLAGS} ${CDEFS} $< $(LDFLAGS) @LIBGB_PATH@ @LIBGB_NAME@ $(LIBS) -o $@
+
+all:	log_dummy.@MOD_EXT@ \
+	err.@MOD_EXT@ \
+	passwd_file.@MOD_EXT@ \
+	pam.@MOD_EXT@ \
+	passwd_mysql.@MOD_EXT@ \
+	passwd_pgsql.@MOD_EXT@ \
+	lang.@MOD_EXT@ \
+	redir.@MOD_EXT@ \
+	oopsctl_mod.@MOD_EXT@ \
+	oopsctl \
+	vary_header.@MOD_EXT@ \
+	accel.@MOD_EXT@ \
+	transparent.@MOD_EXT@ \
+	custom_log.@MOD_EXT@ \
+	fastredir.@MOD_EXT@ \
+	berkeley_db_api.@MOD_EXT@ \
+	gigabase_db_api.@MOD_EXT@ \
+	passwd_mysql.@MOD_EXT@ \
+	passwd_pgsql.@MOD_EXT@ \
+	wccp2.@MOD_EXT@ \
+	$(OPT_MODS)
+
+log_dummy.@MOD_EXT@:	log_dummy.c ../modules.h ../oops.h
+
+err.@MOD_EXT@:		err.c ../modules.h ../oops.h
+
+lang.@MOD_EXT@:		lang.c ../modules.h ../oops.h
+
+oopsctl_mod.@MOD_EXT@:	oopsctl_mod.c ../modules.h ../oops.h
+
+wccp2.@MOD_EXT@:	wccp2.c ../modules.h ../oops.h
+
+passwd_file.@MOD_EXT@:	passwd_file.c ../modules.h ../oops.h
+
+pam.@MOD_EXT@:	pam.c ../modules.h ../oops.h
+
+redir.@MOD_EXT@:	redir.c ../modules.h ../oops.h
+
+fastredir.@MOD_EXT@:	fastredir.c ../modules.h ../oops.h
+
+vary_header.@MOD_EXT@:	vary_header.c ../modules.h ../oops.h
+
+accel.@MOD_EXT@:	accel.c ../modules.h ../oops.h
+
+transparent.@MOD_EXT@:	transparent.c ../modules.h ../oops.h
+
+custom_log.@MOD_EXT@:	custom_log.c ../modules.h ../oops.h
+
+berkeley_db_api.@MOD_EXT@:	berkeley_db_api.c ../modules.h ../oops.h
+
+gigabase_db_api.@MOD_EXT@:	gigabase_db_api.cpp ../modules.h ../oops.h
+
+oopsctl: oopsctl.c ../modules.h ../config.h  ../oops.h
+	${CC} ${CFLAGS} ${CDEFS} oopsctl.c ${EXTRAOBJS} ${LDFLAGS} ${LIBS} -o oopsctl
+
+passwd_pgsql.so: passwd_sql.c ../modules.h ../oops.h
+	${CC} ${CFLAGS} ${CDEFS} -D__PGSQL -c passwd_sql.c -o passwd_pgsql.o
+	${LD} $(SOFLAGS) $(LDFLAGS) $(LIBS) -o passwd_pgsql.so passwd_pgsql.o $(PGSQL_LIB)
+
+passwd_mysql.so: passwd_sql.c ../modules.h ../oops.h
+	${CC} ${CFLAGS} ${CDEFS} -D__MYSQL -c passwd_sql.c -o passwd_mysql.o
+	${LD} $(SOFLAGS) $(LDFLAGS) $(LIBS) -o passwd_mysql.so passwd_mysql.o $(MYSQL_LIB)
+
+passwd_pgsql.o: passwd_sql.c ../modules.h ../oops.h
+	${CC} ${CFLAGS} ${CDEFS} -D__PGSQL -c passwd_sql.c -o passwd_pgsql.o
+
+passwd_mysql.o: passwd_sql.c ../modules.h ../oops.h
+	${CC} ${CFLAGS} ${CDEFS} -D__MYSQL -c passwd_sql.c -o passwd_mysql.o
+
+
+clean:
+	rm -f *.o *.so oopsctl
+

@@ -1,0 +1,714 @@
+AC_INIT(src/oops.c)
+AC_CANONICAL_SYSTEM
+AC_PROG_CC
+AC_PROG_CXX
+AC_PROG_INSTALL
+AC_PROG_LEX
+AC_PROG_YACC
+AC_AIX
+AC_C_INLINE
+
+sed_script='s/,/.so /g'
+
+AC_ARG_ENABLE(opt-modules,--enable-opt-modules      Additional modules (comma separated),\
+OPT_MODS=`echo $enable_opt_modules | sed "$sed_script"`.so)
+
+AC_ARG_ENABLE(large-files,--enable-large-files      Enable large files support,\
+large_files="yes")
+
+AC_ARG_ENABLE(static-modules,--enable-static-modules   Link modules statically,\
+static_modules="yes")
+
+AC_ARG_ENABLE(db-locks,--enable-db-locks         Enable internal DB locks (use only with BerkeleyDB!),\
+AC_DEFINE(USE_INTERNAL_DB_LOCKS))
+
+AC_ARG_ENABLE(oops-user,--enable-oops-user        Username under which uid Oops will run,\
+OOPS_USER="$enableval")
+
+AC_ARG_ENABLE(tnf-probes,--enable-tnf-probes       Enable TNFPROBE under Solaris,\
+AC_DEFINE(TNF_ENABLED))
+
+AC_ARG_WITH(DB,--with-DB=[[DIR]]           BerkeleyDB home directory,\
+LIBDB_PATH=$withval,LIBDB_PATH="")
+
+AC_ARG_WITH(GB,--with-GB=[[PATH]]           Gigabase library path,\
+LIBGB_PATH=$withval,LIBGB_PATH="")
+
+AC_ARG_WITH(MYSQL,--with-MYSQL=[[DIR]]        MySQL home directory,\
+MYSQL_PATH=$withval,MYSQL_PATH="")
+
+AC_ARG_WITH(PGSQL,--with-PGSQL=[[DIR]]        Postgres home directory,\
+LIBPG_PATH=$withval,LIBPG_PATH="")
+
+AC_ARG_WITH(regexp,--with-regexp=(builtin|pcre|system)   Which regex to use,
+  regexp_val="$withval", regexp_val="builtin")
+
+AC_ARG_WITH(malloc,--with-malloc             Which malloc library/object file to use,
+  with_malloc="$withval", with_malloc="")
+
+AC_ARG_WITH(zlib,--with-zlib=[[PATH]]         Which zlib library/object file to use,
+  with_zlib="$withval", with_zlib="")
+
+AC_CHECK_HEADERS(crypt.h getopt.h pthread.h stdlib.h string.h strings.h unistd.h sys/inttypes.h)
+AC_CHECK_HEADERS(netinet/ip_fil.h, AC_DEFINE(HAVE_IPF))
+AC_CHECK_HEADERS(netinet/ip6.h, AC_DEFINE(HAVE_IP6_H))
+
+pwd=`pwd`
+LIBDB_NAME=-ldb
+AC_MSG_CHECKING(for libdb.a)
+if test "X$LIBDB_PATH" != "X" ; then
+    LIBDB_PATH=$LIBDB_PATH
+elif test -r "/usr/local/BerkeleyDB/lib/libdb.a"; then
+    LIBDB_PATH="/usr/local/BerkeleyDB"
+elif test -r "/usr/local/BerkeleyDB.3.1/lib/libdb.a"; then
+    LIBDB_PATH="/usr/local/BerkeleyDB.3.1"
+elif test -r "/usr/local/BerkeleyDB.3.0/lib/libdb.lib"; then
+    LIBDB_PATH="/usr/local/BerkeleyDB.3.0"
+elif test -r "$pwd/libdb.a"; then
+    LIBDB_PATH="$pwd"
+elif test -r "/usr/local/lib/libdb.a"; then
+    LIBDB_PATH="/usr/local"
+elif test -r "/usr/lib/libdb2.a"; then                                         
+    LIBDB_PATH="/usr"                                                          
+    LIBDB_NAME=-ldb2                                                           
+elif test -r "/usr/lib/libdb.a"; then
+    LIBDB_PATH="/usr"
+elif test -r "/usr/local/lib/libdb2.a"; then
+    LIBDB_PATH="/usr/local"
+    LIBDB_NAME=-ldb2
+elif test -r "/usr/local/BerkeleyDB/lib/libdb.lib"; then
+    LIBDB_PATH="/usr/local/BerkeleyDB"
+    LIBDB_NAME=-llibdb
+elif test -r "$pwd/libdb.lib"; then
+    LIBDB_PATH="$pwd"
+    LIBDB_NAME=-llibdb
+elif test -r "/usr/local/lib/libdb.lib"; then
+    LIBDB_PATH="/usr/local"
+    LIBDB_NAME=-llibdb
+elif test -r "/usr/lib/libdb.lib"; then
+    LIBDB_PATH="/usr"
+    LIBDB_NAME=-llibdb
+elif test -r "/usr/local/lib/libdb2.lib"; then
+    LIBDB_PATH="/usr/local"
+    LIBDB_NAME=-llibdb2
+else
+    LIBDB_PATH="no"
+fi
+
+AC_MSG_RESULT($LIBDB_PATH)
+
+if test "X$LIBDB_PATH" = "Xno" ; then
+    LIBDB_PATH=""
+    LIBDB_NAME=""
+else
+    AC_DEFINE(HAVE_BERKELEYDB)
+fi
+
+if test "$LIBDB_PATH" = "/usr/local"; then
+    if test "$LIBDB_NAME" = "-ldb2"; then
+	LIBDB_INCL="-I/usr/local/include/db2"
+    else
+	LIBDB_INCL="-I/usr/local/include"
+    fi
+else
+    if test "X$LIBDB_PATH" != "X" ; then
+	LIBDB_INCL="-I$LIBDB_PATH/include"
+    fi
+fi
+
+LIBDB_REAL_PATH=""
+if test "X$LIBDB_PATH" != "X" ; then
+    LIBDB_REAL_PATH="$LIBDB_PATH/lib"
+    LIBDB_PATH="-L$LIBDB_PATH/lib"
+fi
+
+CFLAGS="$CFLAGS $LIBDB_INCL"
+
+AC_MSG_CHECKING(for GigaBASE)
+if test "$LIBGB_PATH" = "no" ; then
+    AC_MSG_RESULT(disabled)
+    LIBGB_PATH=""
+    LIBGB_NAME=""
+elif test "X$LIBGB_PATH" != "X" ; then
+    AC_MSG_RESULT($LIBGB_PATH)
+elif test -r "/usr/local/lib/libgigabase_r.a"; then
+    LIBGB_INCL="-I/usr/local/include -I/usr/local/include/gigabase"
+    LIBGB_NAME="-lgigabase_r"
+    case "$host_os" in
+	solaris*)
+		LIBGB_PATH=""
+		LIBGB_NAME="/usr/local/lib/libgigabase_r.a"
+		;;
+	osf*)
+		LIBGB_PATH="-L/usr/local/lib -rpath /usr/local/lib"
+		;;
+	*)
+                cat>conftest.c << EOF
+#include <stdlib.h>
+main()
+{
+}
+EOF
+                rm -f conftest
+		($CC -Xlinker -rpath -Xlinker /usr/local/lib conftest.c -o conftest) 2>>config.log
+                if test -x conftest ; then
+                LIBGB_PATH="-L/usr/local/lib -Xlinker -rpath -Xlinker /usr/local/lib"
+                else
+                LIBGB_PATH="-L/usr/local/lib -Xlinker -R -Xlinker /usr/local/lib"
+                fi
+		;;
+    esac
+    if test "X$LIBGB_PATH" = "X$LIBDB_PATH" ; then
+	LIBGB_PATH=""
+    fi
+    AC_DEFINE(HAVE_GIGABASE)
+    AC_MSG_RESULT($LIBGB_NAME)
+else
+    AC_MSG_RESULT(no)
+fi
+
+AC_MSG_CHECKING(for libz)
+LIBZ_NAME=""
+if  test "$with_zlib" = "no" ; then
+    AC_MSG_RESULT(disabled)
+elif test "X$with_zlib" != "X" ; then
+    LIBZ_NAME="$with_zlib"
+elif test -r "/usr/local/lib/libz.a"; then
+    LIBZ_NAME="/usr/local/lib/libz.a"
+    AC_DEFINE(HAVE_ZLIB)
+    AC_MSG_RESULT(/usr/local/lib/libz.a)
+    if test "X`echo $CFLAGS | grep '\-I/usr/local/include'`" = "X"; then
+	CFLAGS="$CFLAGS -I/usr/local/include"
+    fi
+elif test -r "/usr/lib/libz.a"; then
+    LIBZ_NAME="/usr/lib/libz.a"
+    AC_DEFINE(HAVE_ZLIB)
+    AC_MSG_RESULT(/usr/lib/libz.a)
+else
+    LIBZ_NAME=""
+    AC_MSG_RESULT(no)
+fi
+
+AC_CHECK_LIB(pthread, pthread_create, pthread_in=pthread,pthread_in=no)
+if test "$pthread_in" = no; then
+AC_CHECK_LIB(pthreads, pthread_create, pthread_in=pthreads,pthread_in=no)
+fi
+
+if test "$static_modules" != "yes" ; then
+    AC_CHECK_LIB(dl, dlopen, dlopen_in=dl,dlopen_in=no)
+    if test "$dlopen_in" = no; then
+    AC_CHECK_LIB(c, dlopen, dlopen_in=c,dlopen_in=no)
+    fi
+    if test "$dlopen_in" = no; then
+    AC_CHECK_LIB(posix, dlopen, dlopen_in=posix,dlopen=no)
+    fi
+fi
+
+AC_CHECK_LIB(fl, yywrap, need_lfl="-lfl",need_lfl="")
+AC_CHECK_LIB(crypt, crypt, LIBS="$LIBS -lcrypt")
+AC_CHECK_LIB(pam, pam_end)
+if test "$enable_tnf_probes" = "yes" ; then
+    AC_CHECK_LIB(tnfprobe, tnf_probe_debug)
+fi
+
+##
+## Check some typdefs
+##
+AC_MSG_CHECKING(for socklen_t)
+AC_TRY_COMPILE([
+#include	<stdio.h>
+#include	<stdlib.h>
+#include	<signal.h>
+#include	<sys/types.h>
+#include	<sys/socket.h>
+#include	<netinet/in.h>
+],[
+socklen_t	test;],[
+AC_DEFINE(HAVE_SOCKLEN_T) AC_MSG_RESULT(yes)
+],[AC_MSG_RESULT(no)])
+
+AC_CHECK_DEF(stdio.h errno.h, sys_nerr sys_errlist, AC_DEFINE(HAVE_SYSERRLIST))
+
+##
+## Check some typdefs
+##
+AC_MSG_CHECKING(for uint32_t)
+AC_TRY_COMPILE([
+#include	<stdio.h>
+#include	<stdlib.h>
+#ifdef	HAVE_UNISTD
+#include	<stdlib.h>
+#endif
+#ifdef	_WIN32
+#include	<inttypes.h>
+#else
+#include	<pthread.h>
+#endif
+#include	<signal.h>
+#include	<sys/types.h>
+#include	<netinet/in.h>
+],[
+uint32_t	test;],[
+AC_DEFINE(HAVE_UINT32_T) AC_MSG_RESULT(yes)
+],[AC_MSG_RESULT(no)])
+
+##
+## Check some typdefs
+##
+AC_MSG_CHECKING(for uint16_t)
+AC_TRY_COMPILE([
+#include	<stdio.h>
+#include	<stdlib.h>
+#ifdef	HAVE_UNISTD
+#include	<stdlib.h>
+#endif
+#ifdef	_WIN32
+#include	<inttypes.h>
+#else
+#include	<pthread.h>
+#endif
+#include	<signal.h>
+#include	<sys/types.h>
+#include	<netinet/in.h>
+],[
+uint16_t	test;],[
+AC_DEFINE(HAVE_UINT16_T) AC_MSG_RESULT(yes)
+],[AC_MSG_RESULT(no)])
+
+##
+## Check some typdefs
+##
+AC_MSG_CHECKING(for struct timespec)
+AC_TRY_COMPILE([
+#include	<stdio.h>
+#include	<stdlib.h>
+#ifdef	HAVE_UNISTD
+#include	<stdlib.h>
+#endif
+#ifdef	_WIN32
+#include	<inttypes.h>
+#endif
+#include	<signal.h>
+#include	<sys/types.h>
+#include	<netinet/in.h>
+],[
+struct timespec	test;],[
+AC_DEFINE(HAVE_STRUCT_TIMESPEC) AC_MSG_RESULT(yes)
+],[AC_MSG_RESULT(no)])
+
+AC_MSG_CHECKING(for __tm_gmtoff__)
+AC_TRY_COMPILE([
+#include	<stdio.h>
+#include	<stdlib.h>
+#ifdef	HAVE_UNISTD
+#include	<stdlib.h>
+#endif
+#include	<time.h>
+#ifndef
+#include	<pthread.h>
+#include	<sys/types.h>
+#include	<netinet/in.h>
+],[
+struct	tm	tm;
+tm.__tm_gmtoff__ = tm.__tm_gmtoff__*2;
+],[
+AC_DEFINE(HAVE__GMTOFF__) AC_MSG_RESULT(yes)
+],[AC_MSG_RESULT(no)])
+
+LD=ld
+
+##
+##
+##
+if test "$static_modules"  != "yes" ; then
+    if   test "$dlopen_in" = "dl"; then
+	DLLIB="-ldl"
+	MODULES=1
+    elif test "$dlopen_in" = "c"; then
+	MODULES=1
+    elif test "$dlopen_in" = "posix"; then
+	MODULES=1
+    else
+	echo "Can't locate dlopen() - no modules."
+	MODULES=0
+    fi
+fi
+
+if test "$MODULES" = 1; then
+	AC_MSG_CHECKING(flags to link shared objects.)
+	SAVED_LDFLAGS=$LDFLAGS
+	MOD_EXT=so
+cat>conftest.c << EOF
+char *test="test";
+EOF
+cat>confmain.c << EOF
+#include <stdio.h>
+#include <dlfcn.h>
+main()
+{
+void *h=dlopen("./conftest.so",RTLD_NOW);
+void *r=NULL ;
+char **s=NULL;
+
+    if (h) {
+	r = dlsym(h, "test");
+	if ( r ) s = r;
+	if ( s ) printf("%s", *s);
+    }
+}
+EOF
+	$CC confmain.c -o confmain $LIBS $DLLIB 2>>config.log
+	$CC conftest.c -c $CFLAGS -o conftest.o 2>> config.log
+	$LD conftest.o $LIBDB_PATH -shared -o conftest.so 2>> config.log
+	if test -f conftest.so ; then
+	    res=`./confmain`
+	fi
+	if test "$res" = "test"; then
+	    SOFLAGS="$LIBDB_PATH -shared"
+	fi
+	if test "$SOFLAGS" = ""; then
+	    $LD conftest.o $LIBDB_PATH -G -o conftest.so 2>> config.log
+	    if test -f conftest.so ; then
+		res=`./confmain`
+	    fi
+	    if test "$res" = "test"; then
+		SOFLAGS="$LIBDB_PATH -G"
+	    fi
+	fi
+	if test "$SOFLAGS" = ""; then
+	    $LD conftest.o -Bshareable -o conftest.so 2>> config.log
+	    if test -f conftest.so ; then
+		res=`./confmain`
+	    fi
+	    if test "$res" = "test"; then
+		SOFLAGS="$LIBDB_PATH -Bshareable"
+	    fi
+	fi
+	rm -f conftest.so
+	if test "$SOFLAGS" = ""; then
+	    $LD conftest.o -fpic -shared -o conftest.so 2>> config.log
+	    if test -f conftest.so ; then
+		res=`./confmain`
+	    fi
+	    if test "$res" = "test"; then
+		SOFLAGS="$LIBDB_PATH -fpic -shared"
+	    fi
+	fi
+	rm -f conftest.so
+	if test "$SOFLAGS" = ""; then
+	    $LD conftest.o -shared -o conftest.so 2>> config.log
+	    if test -f conftest.so ; then
+		res=`./confmain`
+		echo $res
+	    fi
+	    if test "$res" = "test"; then
+		SOFLAGS="$LIBDB_PATH -shared"
+	    fi
+	fi
+	rm -f conftest* confmain*
+	AC_MSG_RESULT($SOFLAGS)
+	if test "$SOFLAGS" != ""; then
+		AC_DEFINE(MODULES)
+		LIBS="$LIBS $DLLIB"
+	fi
+    AC_MSG_CHECKING(for -export-dynamic)
+cat>confmain.c << EOF
+#include <stdio.h>
+main()
+{
+	printf("yes");
+}
+EOF
+    $CC confmain.c -export-dynamic -o confmain 2>>config.log
+    res=""
+    if test -x confmain ; then
+	res=`./confmain`
+    fi
+    if test "$res" = "yes"; then
+	    LDFLAGS="$LDFLAGS -export-dynamic"
+	    AC_MSG_RESULT(yes)
+    else
+	    AC_MSG_RESULT(no)
+    fi
+fi
+rm -f confmain*
+
+LDFLAGS="$LDFLAGS $LIBDB_PATH"
+CXXCOMPFLAGS=-c
+CXXSOFLAGS=$SOFLAGS
+
+case "$host_os" in
+irix*)    CFLAGS="-D_SGI_MP_SOURCE"
+	  ;;
+osf*)     CFLAGS="$CFLAGS -D_REENTRANT -DOSF"
+	  LIBS="-oldstyle_liblookup -lpthread $LIBS $LIBDB_PATH $LIBDB_NAME"
+
+	  ;;
+freebsd*) CFLAGS="$CFLAGS -pthread -D_REENTRANT -DFREEBSD -D_THREAD_SAFE -DFD_SETSIZE=2048"
+	  CXX=g++
+	  CXXSOFLAGS="-shared -Xlinker -Bstatic"
+	  LIBS="-lc_r $LEXLIB $LIBS $LIBDB_PATH $LIBDB_NAME"
+	  if test "$large_files" = "yes" ; then
+		## FreeBSD need no any special flags for 64bit files
+		CFLAGS="$CFLAGS -DWITH_LARGE_FILES"
+	  fi
+	  if test "X$LIBGB_NAME" != "X" ; then
+		LIBGB_NAME="$LIBGB_NAME -lstdc++"
+	  fi
+	  ;;
+bsdi*)	  CFLAGS="$CFLAGS -pthread -DBSDOS"
+	  LIBS="$LEXLIB $LIBS"
+	  CXX=g++
+	  ;;
+gnu*|linux*)   CFLAGS="$CFLAGS -D_REENTRANT -DLINUX"
+	  CXX=g++
+	  if test "$pthread_in" = "pthreads" ; then
+		CFLAGS="$CFLAGS -D_MIT_POSIX_THREADS"
+		LIBS="-lpthreads $LEXLIB -ldb $LIBS"
+		echo Probably you have MIT-threads. If yes, swich to LinuxThreads.
+	  else
+		LIBS="-lpthread $LEXLIB $LIBS"
+	  fi
+	  LIBS="$LIBS $LIBDB_PATH $LIBDB_NAME"
+	  if test "$large_files" = "yes" ; then
+		## Linux ext2fs does'nt support large files yet.
+		AC_MSG_RESULT(Warning: Linux ext2fs doesn't support large files.)
+		CFLAGS="$CFLAGS -DWITH_LARGE_FILES -D_FILE_OFFSET_BITS=64 -D__USE_LARGEFILE64 -D__USE_FILE_OFFSET64"
+	  fi
+	  ;;
+solaris*) CFLAGS="$CFLAGS -D_REENTRANT -DSOLARIS"
+	  if test "X$LIBDB_REAL_PATH" != "X" ; then
+	  	LIBDB_NAME="-R$LIBDB_REAL_PATH $LIBDB_NAME"
+	  fi
+	  LIBS="-lm -ly -ll $LIBS -lsocket -lnsl $LIBDB_PATH $LIBDB_NAME"
+	  case "$CC" in
+		gcc*)	LIBS="-lthread -lpthread $LIBS"
+			CXX=g++
+			;;
+		*)	CFLAGS="$CFLAGS -mt"
+			SUNPRO_CC_VER=`CC -V 2>&1 | sed 's/.*C++ //' | sed 's/\..*//'`
+			if test "$SUNPRO_CC_VER" = "5" ; then
+			    CXX="CC -compat=4 -w -fast -xO3 -DNO_MEMBER_TEMPLATES=1"
+			else
+			    CXX="CC -w -features=anachronisms"
+			fi
+			if test "$MODULES" != 1; then
+			    CXXCOMPFLAGS="-xar"
+			fi
+			if test "X$LIBGB_NAME" != "X" ; then
+			    LIBGB_NAME="$LIBGB_NAME -lC"
+			fi
+			;;
+	  esac
+	  if test "$large_files" = "yes" ; then
+		CFLAGS="$CFLAGS -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -DWITH_LARGE_FILES"
+	  fi
+	  ;;
+aix4*)    AC_DEFINE(MODULES)
+	  LIBS="$LIBS -ldl $LEXLIB"
+          SOFLAGS=-G
+          case "$CC" in
+          gcc*)   CFLAGS="-D_THREAD_SAFE $CFLAGS"
+		  CXX=g++
+                  LIBS="$LIBS -lpthreads -lc_r"
+                  ;;
+          cc_r* | xlc_r* | xlC_r* )
+                  CC="$CC -qlanglvl=ansi -brtl -bexpall"
+                  LD="makeC++SharedLib -p10 -bshared -lpthreads -lc_r"
+                  ;;
+	  esac
+          if test "$large_files" = "yes" ; then
+		CFLAGS="$CFLAGS -D_LARGE_FILES -D_LARGE_FILE_API -DWITH_LARGE_FILES"
+	  fi
+	  ;;
+esac
+
+if test "X$MYSQL_PATH" != "X" ; then
+    LIBS="-L$MYSQL_PATH/lib -lmysqlclient $LIBS"
+    AC_DEFINE(HAVE_MYSQL)
+    CFLAGS="$CFLAGS -I$MYSQL_PATH/include"
+    MYSQL_LIB="-L$MYSQL_PATH/lib -lmysqlclient"
+fi
+
+if test "X$PGSQL_PATH" != "X" ; then
+    LIBS="$LIBS -L$PGSQL_PATH/lib -lpg"
+    AC_DEFINE(HAVE_PGSQL)
+    CFLAGS="-I$PGSQL_PATH/include $LIBS"
+    PGSQL_LIB="-L$PGSQL_PATH/lib -lpg"
+fi
+
+
+AC_CHECK_FUNCS(atoll bzero chroot ctime_r daemon getdomainname gethostbyname_r)
+AC_CHECK_FUNC(getopt,AC_DEFINE(HAVE_GETOPT),EXTRASRC="$EXTRASRC getopt.c" ; cd src; cp -f lib/getopt/getopt.c ./; cp -f lib/getopt/getopt.h ./; cp -f lib/getopt/getopt1.c ./;cd ..)
+AC_CHECK_FUNCS(getrlimit getrusage gmtime_r localtime_r poll pread pwrite directio)
+
+case "$regexp_val" in
+  system)
+    AC_CHECK_FUNC(regcomp, , [echo "regcomp not found in system libraries" 2>&1; exit 1])
+    AC_DEFINE(REGEX_H, <regex.h>)
+    ;;
+  pcre)
+		if test -r "/usr/lib/libpcreposix.a" -a -r "/usr/lib/libpcre.a"; then
+			LIBS="$LIBS /usr/lib/libpcreposix.a /usr/lib/libpcre.a"
+		elif test -r "/usr/local/lib/libpcreposix.a" -a -r "/usr/local/lib/libpcre.a"; then
+	    LIBS="$LIBS /usr/local/lib/libpcreposix.a /usr/local/lib/libpcre.a"
+		fi
+    if test "X`echo $CFLAGS | grep '\-I/usr/local/include'`" = "X"; then
+	CFLAGS="$CFLAGS -I/usr/local/include"
+    fi
+    AC_DEFINE(REGEX_H, <pcreposix.h>)
+    ;;
+  builtin)
+    AC_DEFINE(REGEX_H, "gnu_regex.h") EXTRASRC="$EXTRASRC gnu_regex.c"
+    cd src; cp -f lib/regex/gnu_regex.c ./; cd .. ;
+    cd src; cp -f lib/regex/gnu_regex.h ./; cd .. ;
+    ;;
+  *)
+    echo "unknown value of --with-regexp option" 2>&1; exit 1
+    ;;
+esac
+
+case "$host_os" in
+gnu*|linux*)
+    EXTRASRC="$EXTRASRC rwlock.c" ; 
+    cd src;
+    cp -f lib/rwlock/rwlock.c ./;
+    cp -f lib/rwlock/rwlock.h ./; 
+    cd ..
+    ;;
+*)
+    AC_CHECK_FUNC(pthread_rwlock_init,AC_DEFINE(HAVE_PTHREAD_RWLOCK_INIT),EXTRASRC="$EXTRASRC rwlock.c" ; cd src; cp -f lib/rwlock/rwlock.c ./; cp -f lib/rwlock/rwlock.h ./; cd ..)
+    ;;
+esac
+
+AC_CHECK_FUNCS(setegid snprintf setrlimit strcasestr strerror_r strtoll)
+AC_CHECK_FUNC(strtok_r,,EXTRASRC="$EXTRASRC strtok_r.c" ; cd src; cp -f lib/misc/strtok_r.c ./; cd ..)
+AC_CHECK_FUNC(snprintf,AC_DEFINE(HAVE_SNPRINTF),OOPSCTL_SNPRINTF="../snprintf.o"; EXTRASRC="$EXTRASRC snprintf.c" ; cd src; cp -f lib/misc/snprintf.c ./; cd ..)
+AC_PATH_PROG(CHOWN, chown, /usr/sbin/chown, $PATH:/bin:/usr/bin:/usr/sbin)
+
+if test "X$with_malloc" != "X" ; then
+LIBS="$with_malloc $LIBS"
+fi
+
+if test "$MODULES" != 1; then
+MOD_EXT=o
+STATIC_MODULES="modules/accel.o modules/berkeley_db_api.o modules/gigabase_db_api.o modules/custom_log.o modules/err.o modules/fastredir.o modules/lang.o modules/log_dummy.o modules/oopsctl_mod.o modules/passwd_file.o modules/pam.o modules/passwd_mysql.o modules/passwd_pgsql.o modules/redir.o modules/transparent.o modules/vary_header.o modules/wccp2.o"
+fi
+
+echo $CC
+echo $CFLAGS
+echo $LIBS
+
+if test "${enable_oops_user+set}" != set; then
+  printf %s "Under which uid Oops! will run? Enter username or press Enter: "
+  read OOPS_USER
+fi
+
+VER=`cat src/version`
+if test "X$OOPS_USER" != "X" ; then
+	echo
+	echo ">>WARNING! YOU MUST CHECK THAT ALL FILES USED BY OOPS"
+	echo ">>ARE OWNED BY '$OOPS_USER'. OTHERWISE, YOU WILL HAVE PROBLEMS."
+	echo
+	SETOWNER="-o $OOPS_USER"
+	OOPSUSER_DEF="userid	$OOPS_USER"
+	AC_SUBST(OOPS_USER)
+	AC_SUBST(SETOWNER)
+else
+	OOPSUSER_DEF=""
+fi
+AC_SUBST(OOPSUSER_DEF)
+
+AC_SUBST(YACCLIB)
+AC_SUBST(EXTRASRC)
+AC_SUBST(SOFLAGS)
+AC_SUBST(MOD_EXT)
+AC_SUBST(OPT_MODS)
+AC_SUBST(STATIC_MODULES)
+AC_SUBST(CHOWN)
+AC_SUBST(LD)
+AC_SUBST(LDFLAGS)
+AC_SUBST(VER)
+AC_SUBST(LIBGB_PATH)
+AC_SUBST(LIBGB_NAME)
+AC_SUBST(LIBGB_INCL)
+AC_SUBST(LIBZ_NAME)
+AC_SUBST(CXX)
+AC_SUBST(CXXCOMPFLAGS)
+AC_SUBST(CXXSOFLAGS)
+AC_SUBST(MYSQL_LIB)
+AC_SUBST(PGSQL_LIB)
+
+AC_DEFINE(OPEN_FILES_MAXIMUM,8196)
+if test "x$prefix" != xNONE; then
+  oops_prefix="$prefix"
+else
+  oops_prefix="$ac_default_prefix"
+fi
+
+if test "x$sbindir" != 'x${exec_prefix}/sbin'; then
+  oops_sbindir="$sbindir"
+else
+  oops_sbindir="$oops_prefix/oops"
+fi
+
+if test "x$sysconfdir" != 'x${prefix}/etc'; then
+  oops_sysconfdir="$sysconfdir"
+else
+  oops_sysconfdir="$oops_prefix/oops"
+fi
+
+if test "x$localstatedir" != 'x${prefix}/var'; then
+  oops_localstatedir="$localstatedir"
+else
+  oops_localstatedir="$oops_prefix/oops/logs"
+fi
+
+if test "x$libdir" != 'x${exec_prefix}/lib'; then
+  oops_libdir="$libdir"
+else
+  oops_libdir="$oops_prefix/oops/modules"
+fi
+
+OOPS_LIBS="$LIBS"
+OOPS_SBINDIR=$oops_sbindir
+OOPS_SYSCONFDIR=$oops_sysconfdir
+OOPS_LOCALSTATEDIR=$oops_localstatedir
+OOPS_LIBDIR=$oops_libdir
+
+OOPS_HOME="$oops_prefix/oops"
+
+AC_SUBST(OOPS_HOME)
+AC_SUBST(OOPS_SBINDIR)
+AC_SUBST(OOPS_SYSCONFDIR)
+AC_SUBST(OOPS_LOCALSTATEDIR)
+AC_SUBST(OOPS_LIBDIR)
+AC_SUBST(OOPS_LIBS)
+AC_SUBST(OOPS_RPATH)
+AC_SUBST(LIBDB_INCL)
+AC_SUBST(LIBDB_PATH)
+AC_SUBST(LIBDB_RPATH)
+AC_SUBST(LIBDB_NAME)
+AC_SUBST(LIBDB_INCL)
+AC_SUBST(LIBZ_NAME)
+AC_SUBST(EXTRASRC)
+
+
+AC_DEFINE_UNQUOTED(OOPS_HOME, "$oops_prefix/oops")
+AC_DEFINE_UNQUOTED(OOPS_SBINDIR, "$oops_sbindir")
+AC_DEFINE_UNQUOTED(OOPS_SYSCONFDIR, "$oops_sysconfdir")
+AC_DEFINE_UNQUOTED(OOPS_LOCALSTATEDIR, "$oops_localstatedir")
+AC_DEFINE_UNQUOTED(OOPS_LIBDIR, "$oops_libdir")
+AC_DEFINE_UNQUOTED(OOPS_CFG, "$oops_sysconfdir/oops.cfg")
+AC_DEFINE_UNQUOTED(OOPS_CC, "$CC")
+AC_DEFINE_UNQUOTED(OOPS_CFLAGS, "$CFLAGS")
+AC_DEFINE_UNQUOTED(OOPS_LIBS, "$LIBS")
+AC_CONFIG_HEADER(src/config.h)
+AC_OUTPUT(src/Makefile src/modules/Makefile src/oops.cfg doc/oops.8 doc/oopsctl.8)
+
+if test "X$LIBDB_NAME" = "X" ; then
+    if test "X$LIBGB_NAME" = "X" ; then
+        echo Warning! You don\'t have BerkeleyDB or GigaBASE.
+        echo You will not be able to use storages.
+    fi
+fi
